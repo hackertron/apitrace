@@ -93,6 +93,7 @@ class RenderId {
   bool operator>=(const RenderId &o) const { return value >= o.value; }
   bool operator<=(const RenderId &o) const { return value <= o.value; }
   bool operator==(const RenderId &o) const { return value == o.value; }
+  bool operator!=(const RenderId &o) const { return value != o.value; }
   static const uint32_t INVALID_RENDER = (-1 & ~ID_PREFIX_MASK);
 
  private:
@@ -178,6 +179,7 @@ class ExperimentId {
   bool operator>(const ExperimentId &o) const { return value > o.value; }
   bool operator<=(const ExperimentId &o) const { return value <= o.value; }
   bool operator!=(const ExperimentId &o) const { return value != o.value; }
+  bool operator==(const ExperimentId &o) const { return value == o.value; }
   static const uint32_t INVALID_EXPERIMENT = (-1 & ~ID_PREFIX_MASK);
  private:
   uint32_t value;
@@ -191,6 +193,7 @@ struct MetricSeries {
 
 struct RenderSequence {
   RenderSequence(RenderId b, RenderId e) : begin(b), end(e) {}
+  RenderSequence(const RenderSequence &o) : begin(o.begin), end(o.end) {}
   RenderSequence() {}
   RenderId begin;
   RenderId end;
@@ -201,6 +204,9 @@ typedef std::vector<RenderSequence> RenderSeries;
 struct RenderSelection {
   SelectionId id;
   RenderSeries series;
+  RenderSelection() {}
+  RenderSelection(const RenderSelection &o)
+      : id(o.id), series(o.series) {}
   void clear() { series.clear(); }
   void push_back(int begin, int end) {
     series.push_back(RenderSequence(RenderId(begin), RenderId(end)));
@@ -253,6 +259,23 @@ enum UniformDimension {
   k4x4
 };
 
+struct StateKey {
+  std::string path;
+  std::string name;
+
+  StateKey() {}
+  StateKey(const std::string _path,
+           const std::string _name)
+      : path(_path), name(_name) {}
+  bool operator<(const StateKey &o) const {
+    if (path < o.path)
+      return true;
+    if (path > o.path)
+      return false;
+    return (name < o.name);
+  }
+};
+
 // Serializable asynchronous callbacks made from remote
 // implementations of IFrameRetrace.
 class OnFrameRetrace {
@@ -298,6 +321,11 @@ class OnFrameRetrace {
                          UniformType type,
                          UniformDimension dimension,
                          const std::vector<unsigned char> &data) = 0;
+  virtual void onState(SelectionId selectionCount,
+                       ExperimentId experimentCount,
+                       RenderId renderId,
+                       StateKey item,
+                       const std::vector<std::string> &value) = 0;
 };
 
 // Serializable asynchronous retrace requests.
@@ -353,6 +381,13 @@ class IFrameRetrace {
                           const std::string &name,
                           int index,
                           const std::string &data) = 0;
+  virtual void retraceState(const RenderSelection &selection,
+                            ExperimentId experimentCount,
+                            OnFrameRetrace *callback) = 0;
+  virtual void setState(const RenderSelection &selection,
+                        const StateKey &item,
+                        int offset,
+                        const std::string &value) = 0;
 };
 
 class FrameState {

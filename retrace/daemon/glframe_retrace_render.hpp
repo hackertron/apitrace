@@ -48,6 +48,7 @@ class OnFrameRetrace;
 class ExperimentId;
 class MetricId;
 class PerfMetrics;
+class StateOverride;
 
 class RetraceRender {
  public:
@@ -56,9 +57,9 @@ class RetraceRender {
                 StateTrack *tracker);
   ~RetraceRender();
 
-  struct UniformCallbackContext {
-    UniformCallbackContext(SelectionId s, ExperimentId e,
-                           RenderId r, OnFrameRetrace *c)
+  struct CallbackContext {
+    CallbackContext(SelectionId s, ExperimentId e,
+                    RenderId r, OnFrameRetrace *c)
         : selection(s), experiment(e), render(r), callback(c) {}
     SelectionId selection;
     ExperimentId experiment;
@@ -70,7 +71,8 @@ class RetraceRender {
                            RenderTargetType type) const;
   void retrace(StateTrack *tracker) const;
   void retrace(const StateTrack &tracker,
-               const UniformCallbackContext *c = NULL) const;
+               const CallbackContext *uniform_context = NULL,
+               const CallbackContext *state_context = NULL) const;
   bool endsFrame() const { return m_end_of_frame; }
   bool replaceShaders(StateTrack *tracker,
                       const std::string &vs,
@@ -88,6 +90,10 @@ class RetraceRender {
              OnFrameRetrace *callback);
   void setUniform(const std::string &name, int index,
                   const std::string &data);
+  void setState(const StateKey &item,
+                int offset,
+                const std::string &value);
+
   static bool isRender(const trace::Call &c);
   static bool changesContext(const trace::Call &c);
   static bool endsFrame(const trace::Call &c);
@@ -95,6 +101,10 @@ class RetraceRender {
 
  private:
   void overrideUniforms() const;
+  void onState(SelectionId selId,
+               ExperimentId experimentCount,
+               RenderId renderId,
+               OnFrameRetrace *callback) const;
 
   trace::AbstractParser *m_parser;
   retrace::Retracer *m_retracer;
@@ -112,6 +122,7 @@ class RetraceRender {
   bool m_disabled, m_simple_shader;
   class UniformOverride;
   UniformOverride *m_uniform_override;
+  StateOverride *m_state_override;
 };
 
 }  // namespace glretrace

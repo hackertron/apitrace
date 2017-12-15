@@ -30,8 +30,8 @@
 
 #include <stdio.h>
 
-#include <GLES2/gl2.h>
 #include <GL/gl.h>
+#include <GL/glext.h>
 
 #include <string>
 #include <vector>
@@ -175,6 +175,21 @@ class GlFunctions {
   static void UniformMatrix4x3fv(GLint location, GLsizei count,
                                  GLboolean transpose, const GLfloat *value);
   static void Finish();
+  static void CullFace(GLenum mode);
+  static void LineWidth(GLfloat width);
+  static void ColorMask(GLboolean red, GLboolean green,
+                        GLboolean blue, GLboolean alpha);
+  static void ClearDepthf(GLfloat d);
+  static void DepthFunc(GLenum func);
+  static void DepthRangef(GLfloat n, GLfloat f);
+  static void DepthMask(GLboolean flag);
+  static void FrontFace(GLenum mode);
+  static void PolygonOffset(GLfloat factor, GLfloat units);
+  static void SampleCoverage(GLfloat value, GLboolean invert);
+  static void GetBufferParameteriv(GLenum target, GLenum pname, GLint *params);
+  static void *MapBufferRange(GLenum target, GLintptr offset,
+                              GLsizeiptr length, GLbitfield access);
+  static GLboolean UnmapBuffer(GLenum target);
 
  private:
   GlFunctions();

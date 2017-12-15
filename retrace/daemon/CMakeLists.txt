@@ -73,6 +73,10 @@ set (RETRACE_SOURCES
   glframe_socket.cpp
   glframe_state.cpp
   glframe_state.hpp
+  glframe_state_enums.cpp
+  glframe_state_enums.hpp
+  glframe_state_override.cpp
+  glframe_state_override.hpp
   glframe_stderr.hpp
   glframe_thread.hpp
   glframe_traits.hpp

@@ -1,4 +1,4 @@
-// Copyright (C) Intel Corp.  2015.  All Rights Reserved.
+// Copyright (C) Intel Corp.  2017.  All Rights Reserved.
 
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -25,30 +25,22 @@
 //  *   Mark Janes <mark.a.janes@intel.com>
 //  **********************************************************************/
 
-#ifndef RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_
-#define RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_
+#ifndef _GLFRAME_STATE_ENUMS_HPP__
+#define _GLFRAME_STATE_ENUMS_HPP__
 
-#ifndef WIN32
-#include <waffle-1/waffle.h>
-#endif
+#include <stdint.h>
 #include <GL/gl.h>
 
-namespace glretrace {
-class TestContext {
- public:
-  TestContext();
-  ~TestContext();
-  void swapBuffers();
+#include <string>
+#include <vector>
 
- private:
-#ifndef WIN32
-  struct waffle_display *m_dpy;
-  struct waffle_config *m_config;
-  struct waffle_window *m_window;
-  struct waffle_context *m_ctx;
-#endif
-  // GLuint vbo, prog, texture;
-  // GLint attribute_coord2d, tex_uniform;
-};
+namespace glretrace {
+
+uint32_t state_name_to_enum(const std::string &value);
+std::string state_enum_to_name(GLint value);
+std::vector<std::string> state_name_to_choices(const std::string &n);
+std::vector<std::string> state_name_to_indices(const std::string &n);
+
 }  // namespace glretrace
-#endif  // RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_
+
+#endif

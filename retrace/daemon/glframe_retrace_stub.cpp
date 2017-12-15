@@ -63,6 +63,7 @@ using glretrace::Semaphore;
 using glretrace::Severity;
 using glretrace::ShaderAssembly;
 using glretrace::Socket;
+using glretrace::StateKey;
 using glretrace::Thread;
 using glretrace::WARN;
 using google::protobuf::io::ArrayInputStream;
@@ -70,6 +71,7 @@ using google::protobuf::io::ArrayOutputStream;
 using google::protobuf::io::CodedInputStream;
 using google::protobuf::io::CodedOutputStream;
 using glretrace::UniformType;
+
 namespace {
 
 class RetraceSocket {
@@ -765,10 +767,10 @@ class BatchRequest : public IRetraceRequest {
 class UniformRequest : public IRetraceRequest {
  public:
   UniformRequest(SelectionId *current_selection,
-               ExperimentId *current_experiment,
-               std::mutex *protect,
-               const RenderSelection &selection,
-               OnFrameRetrace *cb)
+                 ExperimentId *current_experiment,
+                 std::mutex *protect,
+                 const RenderSelection &selection,
+                 OnFrameRetrace *cb)
       : m_sel_count(current_selection),
         m_exp_count(current_experiment),
         m_protect(protect),
@@ -930,6 +932,120 @@ class SetUniformRequest : public IRetraceRequest {
 
  private:
   RetraceRequest m_proto_msg;
+};
+
+class StateRequest : public IRetraceRequest {
+ public:
+  StateRequest(SelectionId *current_selection,
+               ExperimentId *current_experiment,
+               std::mutex *protect,
+               const RenderSelection &selection,
+               OnFrameRetrace *cb)
+      : m_sel_count(current_selection),
+        m_exp_count(current_experiment),
+        m_protect(protect),
+        m_callback(cb) {
+    auto stateRequest = m_proto_msg.mutable_state();
+    auto selectionRequest = stateRequest->mutable_selection();
+    makeRenderSelection(selection, selectionRequest);
+    stateRequest->set_experiment_count((*current_experiment)());
+    m_proto_msg.set_requesttype(ApiTrace::STATE_REQUEST);
+  }
+  virtual void retrace(RetraceSocket *s) {
+    {
+      std::lock_guard<std::mutex> l(*m_protect);
+      const auto &sel = m_proto_msg.state().selection();
+      const SelectionId id(sel.selection_count());
+      if (*m_sel_count != id)
+        // more recent selection was made while this was enqueued
+        return;
+      const ExperimentId eid(m_proto_msg.state().experiment_count());
+      if (*m_exp_count != eid)
+        // more recent experiment was made while this was enqueued
+        return;
+    }
+    RetraceResponse response;
+    // sends single request, read multiple responses
+    s->request(m_proto_msg);
+    while (true) {
+      response.Clear();
+      s->response(&response);
+      assert(response.has_state());
+      const auto &state_response = response.state();
+      if (state_response.render_id() == (unsigned int)-1) {
+        // all responses sent.  Send a bogus state to inform the
+        // model that uniforms are complete
+        m_callback->onState(SelectionId(SelectionId::INVALID_SELECTION),
+                            ExperimentId(ExperimentId::INVALID_EXPERIMENT-1),
+                            RenderId(RenderId::INVALID_RENDER),
+                            glretrace::StateKey(), std::vector<std::string>());
+        break;
+      }
+
+      const auto selection = SelectionId(state_response.selection_count());
+      {
+        std::lock_guard<std::mutex> l(*m_protect);
+        if (*m_sel_count != selection)
+          // more recent selection was made while retrace was being
+          // executed.
+          continue;
+      }
+      const auto experiment = ExperimentId(state_response.experiment_count());
+      {
+        std::lock_guard<std::mutex> l(*m_protect);
+        if (*m_exp_count != experiment)
+          // more recent selection was made while retrace was being
+          // executed.
+          continue;
+      }
+      const RenderId rid(state_response.render_id());
+      auto &item = state_response.item();
+      glretrace::StateKey k(item.path(), item.name());
+      std::vector<std::string> value;
+      for (auto v : state_response.value())
+        value.push_back(v);
+      m_callback->onState(selection, experiment, rid,
+                          k, value);
+    }
+  }
+
+ private:
+  const SelectionId * const m_sel_count;
+  const ExperimentId * const m_exp_count;
+  std::mutex *m_protect;
+  RetraceRequest m_proto_msg;
+  OnFrameRetrace *m_callback;
+};
+
+class SetStateRequest : public IRetraceRequest {
+ public:
+  SetStateRequest(const RenderSelection &selection,
+                  StateKey item,
+                  int offset,
+                  const std::string &value)
+      : m_selection(selection),
+        m_item(item),
+        m_offset(offset),
+        m_value(value) {}
+  void retrace(RetraceSocket *sock) {
+    RetraceRequest msg;
+    msg.set_requesttype(ApiTrace::SET_STATE_REQUEST);
+    auto req = msg.mutable_set_state();
+    auto item = req->mutable_item();
+    item->set_path(m_item.path);
+    item->set_name(m_item.name);
+    auto selection = req->mutable_selection();
+    makeRenderSelection(m_selection, selection);
+    req->set_offset(m_offset);
+    req->set_value(m_value);
+    sock->request(msg);
+  }
+
+ private:
+  const RenderSelection m_selection;
+  const StateKey m_item;
+  const int m_offset;
+  const std::string m_value;
 };
 
 class NullRequest : public IRetraceRequest {
@@ -1191,4 +1307,28 @@ FrameRetraceStub::setUniform(const RenderSelection &selection,
     m_current_render_selection = selection.id;
   }
   m_thread->push(new SetUniformRequest(selection, name, index, data));
+}
+
+void
+FrameRetraceStub::retraceState(const RenderSelection &selection,
+                               ExperimentId experimentCount,
+                               OnFrameRetrace *callback) {
+  {
+    std::lock_guard<std::mutex> l(m_mutex);
+    m_current_render_selection = selection.id;
+    assert(m_current_experiment <= experimentCount);
+    m_current_experiment = experimentCount;
+  }
+  m_thread->push(new StateRequest(&m_current_render_selection,
+                                  &m_current_experiment,
+                                  &m_mutex,
+                                  selection, callback));
+}
+
+void
+FrameRetraceStub::setState(const RenderSelection &selection,
+                           const StateKey &item,
+                           int offset,
+                           const std::string &value) {
+  m_thread->push(new SetStateRequest(selection, item, offset, value));
 }

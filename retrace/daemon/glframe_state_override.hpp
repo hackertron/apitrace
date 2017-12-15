@@ -1,4 +1,4 @@
-// Copyright (C) Intel Corp.  2015.  All Rights Reserved.
+// Copyright (C) Intel Corp.  2017.  All Rights Reserved.
 
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -25,30 +25,59 @@
 //  *   Mark Janes <mark.a.janes@intel.com>
 //  **********************************************************************/
 
-#ifndef RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_
-#define RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_
-
-#ifndef WIN32
-#include <waffle-1/waffle.h>
-#endif
 #include <GL/gl.h>
 
+#include <map>
+#include <string>
+#include <vector>
+
+#include "glframe_retrace_interface.hpp"
+
+
 namespace glretrace {
-class TestContext {
+
+class StateOverride {
  public:
-  TestContext();
-  ~TestContext();
-  void swapBuffers();
+  StateOverride() {}
+  void setState(const StateKey &item,
+                int offset,
+                const std::string &value);
+  void overrideState() const;
+  void restoreState() const;
+
+  void onState(SelectionId selId,
+               ExperimentId experimentCount,
+               RenderId renderId,
+               OnFrameRetrace *callback);
+
+  void getState(const StateKey &item,
+                std::vector<uint32_t> *data);
 
  private:
-#ifndef WIN32
-  struct waffle_display *m_dpy;
-  struct waffle_config *m_config;
-  struct waffle_window *m_window;
-  struct waffle_context *m_ctx;
-#endif
-  // GLuint vbo, prog, texture;
-  // GLint attribute_coord2d, tex_uniform;
+  enum Type {
+    kUnknown,
+    kBool,
+    kFloat,
+    kEnum
+  };
+
+  typedef std::map<StateKey, std::vector<uint32_t>> KeyMap;
+  void enact_state(const KeyMap &m) const;
+  void enact_enabled_state(GLint setting, bool v) const;
+  void get_enabled_state(GLint k, std::vector<uint32_t> *data);
+  void get_integer_state(GLint k, std::vector<uint32_t> *data);
+  void get_float_state(GLint k, std::vector<uint32_t> *data);
+  void get_bool_state(GLint k, std::vector<uint32_t> *data);
+
+  void adjust_item(StateKey *item) const;
+  void adjust_offset(const StateKey &item,
+                     int *offset) const;
+  uint32_t interpret_value(const StateKey &item,
+                           const std::string &value);
+
+  KeyMap m_overrides;
+  KeyMap m_saved_state;
+  std::map<StateKey, Type> m_data_types;
 };
+
 }  // namespace glretrace
-#endif  // RETRACE_DAEMON_BARGRAPH_TEST_TEST_BARGRAPH_CTX_H_

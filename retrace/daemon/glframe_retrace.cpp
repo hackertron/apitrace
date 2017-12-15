@@ -27,7 +27,8 @@
 
 #include "glframe_retrace.hpp"
 
-#include <GLES2/gl2.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
 #include <fcntl.h>
 #include <stdio.h>
 
@@ -70,6 +71,7 @@ using glretrace::RenderSelection;
 using glretrace::RenderTargetType;
 using glretrace::SelectionId;
 using glretrace::ShaderAssembly;
+using glretrace::StateKey;
 using glretrace::StateTrack;
 using glretrace::StdErrRedirect;
 using glretrace::WARN;
@@ -384,4 +386,25 @@ FrameRetrace::setUniform(const RenderSelection &selection,
   parser->setBookmark(frame_start.start);
   for (auto i : m_contexts)
     i->setUniform(selection, name, index, data);
+}
+
+void
+FrameRetrace::retraceState(const RenderSelection &selection,
+                           ExperimentId experimentCount,
+                           OnFrameRetrace *callback) {
+  // reset to beginning of frame
+  parser->setBookmark(frame_start.start);
+  for (auto i : m_contexts)
+    i->retraceState(selection, experimentCount, m_tracker, callback);
+}
+
+void
+FrameRetrace::setState(const RenderSelection &selection,
+                       const StateKey &item,
+                       int offset,
+                       const std::string &value) {
+  // reset to beginning of frame
+  parser->setBookmark(frame_start.start);
+  for (auto i : m_contexts)
+    i->setState(selection, item, offset, value, m_tracker);
 }

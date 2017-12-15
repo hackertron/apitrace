@@ -55,6 +55,7 @@ using glretrace::RenderTargetType;
 using glretrace::SelectionId;
 using glretrace::ShaderAssembly;
 using glretrace::Socket;
+using glretrace::StateKey;
 using glretrace::UniformDimension;
 using glretrace::UniformType;
 using glretrace::application_cache_directory;
@@ -385,6 +386,40 @@ FrameRetraceSkeleton::Run() {
                               set_uniform.data());
           break;
         }
+      case ApiTrace::STATE_REQUEST:
+        {
+          assert(request.has_state());
+          auto state = request.state();
+          RenderSelection selection;
+          makeRenderSelection(state.selection(), &selection);
+          m_frame->retraceState(selection,
+                                ExperimentId(state.experiment_count()),
+                                this);
+          // send empty message to signal the last response
+          RetraceResponse proto_response;
+          auto state_resp = proto_response.mutable_state();
+          state_resp->set_selection_count(-1);
+          state_resp->set_render_id(-1);
+          state_resp->set_experiment_count(-1);
+          state_resp->add_value("");
+          auto r_item = state_resp->mutable_item();
+          r_item->set_path("");
+          r_item->set_name("");
+          writeResponse(m_socket, proto_response, &m_buf);
+          break;
+        }
+      case ApiTrace::SET_STATE_REQUEST:
+        {
+          assert(request.has_set_state());
+          auto state = request.set_state();
+          RenderSelection selection;
+          makeRenderSelection(state.selection(), &selection);
+          auto &item = state.item();
+          glretrace::StateKey k(item.path(),
+                                item.name());
+          m_frame->setState(selection, k, state.offset(), state.value());
+          break;
+        }
     }
   }
 }
@@ -600,5 +635,24 @@ FrameRetraceSkeleton::onUniform(SelectionId selectionCount,
       break;
   }
   response->set_data(data.data(), data.size());
+  writeResponse(m_socket, proto_response, &m_buf);
+}
+
+void
+FrameRetraceSkeleton::onState(SelectionId selectionCount,
+                              ExperimentId experimentCount,
+                              RenderId renderId,
+                              StateKey item,
+                              const std::vector<std::string> &value) {
+  RetraceResponse proto_response;
+  auto response = proto_response.mutable_state();
+  response->set_render_id(renderId());
+  response->set_selection_count(selectionCount());
+  response->set_experiment_count(experimentCount.count());
+  auto r_item = response->mutable_item();
+  r_item->set_path(item.path);
+  r_item->set_name(item.name);
+  for (auto i : value)
+    response->add_value(i);
   writeResponse(m_socket, proto_response, &m_buf);
 }

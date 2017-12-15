@@ -36,20 +36,26 @@
 #include "glframe_logger.hpp"
 #include "glframe_metrics.hpp"
 #include "glframe_state.hpp"
+#include "glframe_state_enums.hpp"
 #include "glframe_uniforms.hpp"
 #include "retrace.hpp"
 #include "glstate_internal.hpp"
 #include "trace_parser.hpp"
+#include "glframe_state_override.hpp"
 
 using glretrace::DEBUG;
+using glretrace::ExperimentId;
 using glretrace::GlFunctions;
 using glretrace::PerfMetrics;
 using glretrace::RetraceRender;
 using glretrace::SelectionId;
+using glretrace::StateKey;
 using glretrace::StateTrack;
 using glretrace::RenderTargetType;
 using glretrace::RenderId;
 using glretrace::OnFrameRetrace;
+using glretrace::state_name_to_enum;
+using glretrace::state_enum_to_name;
 
 static const std::string simple_fs =
     "void main(void) {\n"
@@ -147,17 +153,21 @@ class RetraceRender::UniformOverride {
   std::map<UniformKey, std::string> m_uniform_overrides;
 };
 
+
+
 RetraceRender::RetraceRender(trace::AbstractParser *parser,
                              retrace::Retracer *retracer,
-                             StateTrack *tracker) : m_parser(parser),
-                                                    m_retracer(retracer),
-                                                    m_rt_program(-1),
-                                                    m_retrace_program(-1),
-                                                    m_end_of_frame(false),
-                                                    m_highlight_rt(false),
-                                                    m_changes_context(false),
-                                                    m_disabled(false),
-                                                    m_simple_shader(false) {
+                             StateTrack *tracker)
+    : m_parser(parser),
+      m_retracer(retracer),
+      m_rt_program(-1),
+      m_retrace_program(-1),
+      m_end_of_frame(false),
+      m_highlight_rt(false),
+      m_changes_context(false),
+      m_disabled(false),
+      m_simple_shader(false),
+      m_state_override(new StateOverride()) {
   m_parser->getBookmark(m_bookmark.start);
   trace::Call *call = NULL;
   std::stringstream call_stream;
@@ -220,6 +230,7 @@ RetraceRender::RetraceRender(trace::AbstractParser *parser,
 
 RetraceRender::~RetraceRender() {
   delete m_uniform_override;
+  delete m_state_override;
 }
 
 void
@@ -258,6 +269,7 @@ RetraceRender::retraceRenderTarget(const StateTrack &tracker,
   }
 
   m_uniform_override->overrideUniforms();
+  m_state_override->overrideState();
 
   // retrace the final render
   trace::Call *call = m_parser->parse_call();
@@ -267,6 +279,7 @@ RetraceRender::retraceRenderTarget(const StateTrack &tracker,
   delete(call);
 
   m_uniform_override->restoreUniforms();
+  m_state_override->restoreState();
 
   if (blend_enabled)
     GlFunctions::Enable(GL_BLEND);
@@ -320,7 +333,8 @@ RetraceRender::retrace(StateTrack *tracker) const {
 
 void
 RetraceRender::retrace(const StateTrack &tracker,
-                       const UniformCallbackContext *callback) const {
+                       const CallbackContext *uniform_context,
+                       const CallbackContext *state_context) const {
   // check that the parser is in correct state
   trace::ParseBookmark bm;
   m_parser->getBookmark(bm);
@@ -348,6 +362,7 @@ RetraceRender::retrace(const StateTrack &tracker,
   }
 
   m_uniform_override->overrideUniforms();
+  m_state_override->overrideState();
 
   // retrace the final render
   trace::Call *call = m_parser->parse_call();
@@ -356,12 +371,18 @@ RetraceRender::retrace(const StateTrack &tracker,
     m_retracer->retrace(*call);
   delete(call);
 
-  if (callback) {
+  if (uniform_context) {
     Uniforms u;
-    u.onUniform(callback->selection, callback->experiment,
-                callback->render, callback->callback);
+    u.onUniform(uniform_context->selection, uniform_context->experiment,
+                uniform_context->render, uniform_context->callback);
   }
 
+  if (state_context) {
+    onState(state_context->selection, state_context->experiment,
+            state_context->render, state_context->callback);
+  }
+
+  m_state_override->restoreState();
   m_uniform_override->restoreUniforms();
 
   StateTrack::useProgramGL(m_original_program);
@@ -424,4 +445,19 @@ void
 RetraceRender::setUniform(const std::string &name, int index,
                           const std::string &data) {
   m_uniform_override->setUniform(name, index, data);
+}
+
+void
+RetraceRender::onState(SelectionId selId,
+                       ExperimentId experimentCount,
+                       RenderId renderId,
+                       OnFrameRetrace *callback) const {
+  m_state_override->onState(selId, experimentCount, renderId, callback);
+}
+
+void
+RetraceRender::setState(const StateKey &item,
+                        int offset,
+                        const std::string &value) {
+  m_state_override->setState(item, offset, value);
 }

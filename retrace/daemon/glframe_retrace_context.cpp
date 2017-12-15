@@ -51,6 +51,7 @@ using glretrace::RenderOptions;
 using glretrace::RenderSelection;
 using glretrace::RenderTargetType;
 using glretrace::RetraceContext;
+using glretrace::StateKey;
 using glretrace::StateTrack;
 using glretrace::WARN;
 using image::Image;
@@ -466,9 +467,9 @@ RetraceContext::retraceUniform(const RenderSelection &selection,
   for (auto r : m_renders) {
     if (isSelected(r.first, selection)) {
       // pass down the context that is needed to make the uniform callback
-      const RetraceRender::UniformCallbackContext c(selection.id,
-                                                    experimentCount,
-                                                    r.first, callback);
+      const RetraceRender::CallbackContext c(selection.id,
+                                             experimentCount,
+                                             r.first, callback);
       r.second->retrace(tracker, &c);
     } else {
       r.second->retrace(tracker);
@@ -483,4 +484,34 @@ RetraceContext::setUniform(const RenderSelection &selection,
   for (auto r : m_renders)
     if (isSelected(r.first, selection))
       r.second->setUniform(name, index, data);
+}
+
+void
+RetraceContext::retraceState(const RenderSelection &selection,
+                             ExperimentId experimentCount,
+                             const StateTrack &tracker,
+                             OnFrameRetrace *callback) {
+  for (auto r : m_renders) {
+    if (isSelected(r.first, selection)) {
+      const RetraceRender::CallbackContext c(selection.id,
+                                             experimentCount,
+                                             r.first, callback);
+      r.second->retrace(tracker, NULL, &c);
+    } else {
+      r.second->retrace(tracker);
+    }
+  }
+}
+
+void
+RetraceContext::setState(const RenderSelection &selection,
+                         const StateKey &item,
+                         int offset,
+                         const std::string &value,
+                         const StateTrack &tracker) {
+  for (auto r : m_renders) {
+    r.second->retrace(tracker);
+    if (isSelected(r.first, selection))
+      r.second->setState(item, offset, value);
+  }
 }

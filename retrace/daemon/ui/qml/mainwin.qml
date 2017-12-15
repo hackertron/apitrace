@@ -302,12 +302,9 @@ ApplicationWindow {
         visible: false
 
         RefreshControl {
-            Layout.minimumHeight: 20
-            Layout.maximumHeight: 20
             metricsModel: frameRetrace
             Layout.alignment: Qt.AlignTop
             Layout.fillWidth: true
-            Layout.fillHeight: true
         }
         
         BarGraphControl {
@@ -386,6 +383,15 @@ ApplicationWindow {
                 clip: true
                 UniformControl {
                     uniformModel: frameRetrace.uniformModel
+                }
+            }
+            Tab {
+                title: "State"
+                id: stateTab
+                anchors.fill: parent
+                clip: true
+                StateControl {
+                    stateModel: frameRetrace.stateModel
                 }
             }
         }

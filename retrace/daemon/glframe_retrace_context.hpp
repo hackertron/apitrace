@@ -106,6 +106,15 @@ class RetraceContext {
   void setUniform(const RenderSelection &selection,
                   const std::string &name, int index,
                   const std::string &data);
+  void retraceState(const RenderSelection &selection,
+                    ExperimentId experimentCount,
+                    const StateTrack &tracker,
+                    OnFrameRetrace *callback);
+  void setState(const RenderSelection &selection,
+                const StateKey &item,
+                int offset,
+                const std::string &value,
+                const StateTrack &tracker);
 
  private:
   trace::AbstractParser *m_parser;

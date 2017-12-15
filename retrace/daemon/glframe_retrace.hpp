@@ -113,6 +113,13 @@ class FrameRetrace : public IFrameRetrace {
                   const std::string &name,
                   int index,
                   const std::string &data);
+  void retraceState(const RenderSelection &selection,
+                    ExperimentId experimentCount,
+                    OnFrameRetrace *callback);
+  void setState(const RenderSelection &selection,
+                const StateKey &item,
+                int offset,
+                const std::string &value);
 
  private:
   // these are global
