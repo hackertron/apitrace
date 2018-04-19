@@ -45,12 +45,8 @@
 #include "glframe_retrace_context.hpp"
 #include "glframe_retrace_render.hpp"
 #include "glframe_stderr.hpp"
+#include "glframe_thread_context.hpp"
 #include "glretrace.hpp"
-// #include "glws.hpp"
-// #include "trace_dump.hpp"
-// #include "trace_parser.hpp"
-
-// #include "glstate_images.hpp"
 #include "glstate.hpp"
 #include "glstate_internal.hpp"
 #include "trace_dump.hpp"
@@ -108,6 +104,7 @@ FrameRetrace::openFile(const std::string &filename,
                        const std::vector<unsigned char> &,
                        uint64_t,
                        uint32_t framenumber,
+                       uint32_t framecount,
                        OnFrameRetrace *callback) {
   check_gpu_speed(callback);
 
@@ -139,6 +136,8 @@ FrameRetrace::openFile(const std::string &filename,
                 trace::DUMP_FLAG_NO_COLOR);
     GRLOGF(glretrace::DEBUG, "CALL: %s", call_stream.str().c_str());
 
+    bool owned_by_thread_tracker = false;
+    m_thread_context.track(call, &owned_by_thread_tracker);
     // we re-use shaders for shader editing features, even if the
     // source program has deleted them.  To support this, we never
     // delete shaders.
@@ -147,7 +146,8 @@ FrameRetrace::openFile(const std::string &filename,
       m_tracker.track(*call);
     }
     const bool frame_boundary = RetraceRender::endsFrame(*call);
-    delete call;
+    if (!owned_by_thread_tracker)
+      delete call;
     if (frame_boundary) {
       ++current_frame;
       callback->onFileOpening(false, false, current_frame);
@@ -174,9 +174,10 @@ FrameRetrace::openFile(const std::string &filename,
     auto c = new RetraceContext(current_render, parser, &retracer, &m_tracker);
     current_render = RenderId(current_render.index() + c->getRenderCount());
     m_contexts.push_back(c);
-    if (c->endsFrame()) {
+    if (c->endsFrame())
+      --framecount;
+    if (framecount == 0)
       break;
-    }
   }
 
   callback->onFileOpening(false, true, current_frame);
@@ -217,7 +218,7 @@ FrameRetrace::retraceShaderAssembly(const RenderSelection &selection,
 }
 
 FrameState::FrameState(const std::string &filename,
-                       int framenumber) : render_count(0) {
+                       int framenumber, int framecount) : render_count(0) {
   trace::Parser *p = reinterpret_cast<trace::Parser*>(parser);
   p->open(filename.c_str());
   trace::Call *call;
@@ -239,8 +240,11 @@ FrameState::FrameState(const std::string &filename,
     }
 
     if (RetraceRender::endsFrame(*call)) {
-      delete call;
-      break;
+      --framecount;
+      if (framecount == 0) {
+        delete call;
+        break;
+      }
     }
     delete call;
   }

@@ -37,6 +37,7 @@
 #include "retrace.hpp"
 #include "glframe_retrace_interface.hpp"
 #include "glframe_state.hpp"
+#include "glframe_thread_context.hpp"
 
 namespace glretrace {
 
@@ -63,6 +64,7 @@ class FrameRetrace : public IFrameRetrace {
                 const std::vector<unsigned char> &md5,
                 uint64_t fileSize,
                 uint32_t frameNumber,
+                uint32_t frameCount,
                 OnFrameRetrace *callback);
 
   // TODO(majanes) move to frame state tracker
@@ -133,6 +135,8 @@ class FrameRetrace : public IFrameRetrace {
 
   // each entry is the last render in an RT region
   std::vector<RenderId> render_target_regions;
+
+  ThreadContext m_thread_context;
 };
 
 } /* namespace glretrace */

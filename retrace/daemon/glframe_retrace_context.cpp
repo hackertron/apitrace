@@ -64,7 +64,7 @@ RetraceContext::RetraceContext(RenderId current_render,
       m_context_switch(NULL), m_ends_frame(false) {
   m_parser->getBookmark(m_start_bookmark);
   trace::Call *call = parser->parse_call();
-  if (RetraceRender::changesContext(*call))
+  if (ThreadContext::changesContext(*call))
     m_context_switch = call;
   else
     delete call;
@@ -75,19 +75,18 @@ RetraceContext::RetraceContext(RenderId current_render,
   // play through the frame, generating renders
   while (true) {
     auto r = new RetraceRender(parser, retracer, tracker);
+    m_renders[current_render] = r;
+    ++current_render;
     if (r->endsFrame()) {
-      delete r;
       m_ends_frame = true;
       break;
     }
-    m_renders[current_render] = r;
-    ++current_render;
 
     // peek ahead to see if next call is in the following context
     m_parser->getBookmark(m_end_bookmark);
     call = parser->parse_call();
     m_parser->setBookmark(m_end_bookmark);
-    if (RetraceRender::changesContext(*call)) {
+    if (ThreadContext::changesContext(*call)) {
       m_parser->setBookmark(m_end_bookmark);
       delete call;
       break;
